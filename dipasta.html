@@ -296,6 +296,14 @@
   <p class="footer-note">Toca cualquier campo para copiarlo y pegarlo en tu app bancaria.</p>
 </div>
 
+<div id="fallback-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:999; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--card); border-radius:16px; padding:20px; max-width:360px; width:100%; box-shadow:0 8px 30px rgba(0,0,0,0.3);">
+    <p style="margin:0 0 10px; font-size:0.85rem; color:var(--muted);">Mantén presionado el texto y selecciona <b>Copiar</b>:</p>
+    <textarea id="fallback-text" readonly style="width:100%; min-height:90px; font-size:1rem; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--text); resize:none;"></textarea>
+    <button id="fallback-close" style="margin-top:12px; width:100%; padding:11px; border:none; border-radius:10px; background:var(--verde); color:#fff; font-weight:700; font-size:0.9rem;">Listo</button>
+  </div>
+</div>
+
 <script>
 function flashCopied(btn) {
   const original = btn.textContent;
@@ -307,61 +315,42 @@ function flashCopied(btn) {
   }, 1400);
 }
 
-function legacyCopy(text) {
-  return new Promise((resolve, reject) => {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.setAttribute('readonly', '');
-      ta.style.position = 'fixed';
-      ta.style.top = '0';
-      ta.style.left = '0';
-      ta.style.width = '2em';
-      ta.style.height = '2em';
-      ta.style.padding = '0';
-      ta.style.border = 'none';
-      ta.style.outline = 'none';
-      ta.style.boxShadow = 'none';
-      ta.style.background = 'transparent';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-
-      const selection = document.getSelection();
-      const originalRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-
-      ta.focus();
-      ta.select();
-      ta.setSelectionRange(0, ta.value.length); // needed for iOS Safari
-
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-
-      if (originalRange && selection) {
-        selection.removeAllRanges();
-        selection.addRange(originalRange);
-      }
-
-      if (ok) resolve(); else reject(new Error('execCommand copy failed'));
-    } catch (err) {
-      reject(err);
-    }
-  });
+function showFallback(text) {
+  const overlay = document.getElementById('fallback-overlay');
+  const ta = document.getElementById('fallback-text');
+  ta.value = text;
+  overlay.style.display = 'flex';
+  setTimeout(() => {
+    ta.focus();
+    ta.setSelectionRange(0, ta.value.length);
+  }, 50);
 }
 
-function copyText(text) {
+document.getElementById('fallback-close').addEventListener('click', () => {
+  document.getElementById('fallback-overlay').style.display = 'none';
+});
+document.getElementById('fallback-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'fallback-overlay') e.target.style.display = 'none';
+});
+
+function tryModernCopy(text) {
   if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+    return navigator.clipboard.writeText(text);
   }
-  return legacyCopy(text);
+  return Promise.reject(new Error('clipboard API not available'));
+}
+
+function handleCopyClick(text, btn) {
+  tryModernCopy(text)
+    .then(() => flashCopied(btn))
+    .catch(() => showFallback(text));
 }
 
 document.querySelectorAll('.copy-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const targetId = btn.getAttribute('data-target');
     const text = document.getElementById(targetId).textContent.trim();
-    copyText(text).then(() => flashCopied(btn)).catch(() => {
-      window.prompt('No se pudo copiar automaticamente. Copia el texto manualmente:', text);
-    });
+    handleCopyClick(text, btn);
   });
 });
 
@@ -375,9 +364,7 @@ document.getElementById('copy-all').addEventListener('click', () => {
     'Email: myriamluzalvarez@gmail.com'
   ].join('\n');
   const btn = document.getElementById('copy-all');
-  copyText(all).then(() => flashCopied(btn)).catch(() => {
-    window.prompt('No se pudo copiar automaticamente. Copia el texto manualmente:', all);
-  });
+  handleCopyClick(all, btn);
 });
 </script>
 </body>
