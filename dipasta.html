@@ -307,33 +307,61 @@ function flashCopied(btn) {
   }, 1400);
 }
 
-function copyText(text) {
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text);
-  }
+function legacyCopy(text) {
   return new Promise((resolve, reject) => {
     try {
       const ta = document.createElement('textarea');
       ta.value = text;
+      ta.setAttribute('readonly', '');
       ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.width = '2em';
+      ta.style.height = '2em';
+      ta.style.padding = '0';
+      ta.style.border = 'none';
+      ta.style.outline = 'none';
+      ta.style.boxShadow = 'none';
+      ta.style.background = 'transparent';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
+
+      const selection = document.getSelection();
+      const originalRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
       ta.focus();
       ta.select();
-      document.execCommand('copy');
+      ta.setSelectionRange(0, ta.value.length); // needed for iOS Safari
+
+      const ok = document.execCommand('copy');
       document.body.removeChild(ta);
-      resolve();
+
+      if (originalRange && selection) {
+        selection.removeAllRanges();
+        selection.addRange(originalRange);
+      }
+
+      if (ok) resolve(); else reject(new Error('execCommand copy failed'));
     } catch (err) {
       reject(err);
     }
   });
 }
 
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+  }
+  return legacyCopy(text);
+}
+
 document.querySelectorAll('.copy-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const targetId = btn.getAttribute('data-target');
     const text = document.getElementById(targetId).textContent.trim();
-    copyText(text).then(() => flashCopied(btn)).catch(() => {});
+    copyText(text).then(() => flashCopied(btn)).catch(() => {
+      window.prompt('No se pudo copiar automaticamente. Copia el texto manualmente:', text);
+    });
   });
 });
 
@@ -345,10 +373,11 @@ document.getElementById('copy-all').addEventListener('click', () => {
     'Tipo de cuenta: Cuenta Corriente',
     'N° de cuenta: 00-210-07076-05',
     'Email: myriamluzalvarez@gmail.com'
-  ].join('
-');
+  ].join('\n');
   const btn = document.getElementById('copy-all');
-  copyText(all).then(() => flashCopied(btn)).catch(() => {});
+  copyText(all).then(() => flashCopied(btn)).catch(() => {
+    window.prompt('No se pudo copiar automaticamente. Copia el texto manualmente:', all);
+  });
 });
 </script>
 </body>
